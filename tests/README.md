@@ -1,3 +1,3 @@
 # Tests
 
-Automated tests for LithoForge.
+Automated tests used to verify LithoForge functionality.
