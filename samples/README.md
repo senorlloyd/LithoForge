@@ -1,3 +1,3 @@
 # Samples
 
-Sample CTB files, images, and other test data.
+Sample CTB files, test images, and other files used to develop and validate LithoForge.
