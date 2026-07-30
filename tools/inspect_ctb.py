@@ -7,47 +7,52 @@ Licensed under the MIT License.
 See LICENSE for details.
 """
 
+import struct
 import sys
 from pathlib import Path
 
 
 def inspect_ctb(filename):
-    """
-    Read a CTB file and print basic information.
-    """
-
     path = Path(filename)
 
     if not path.exists():
         print(f"Error: '{filename}' not found.")
         return
 
-    file_size = path.stat().st_size
-
-    print("=" * 60)
+    print("=" * 68)
     print("LithoForge CTB Inspector")
-    print("=" * 60)
+    print("=" * 68)
+
     print(f"File : {path.name}")
-    print(f"Path : {path}")
-    print(f"Size : {file_size:,} bytes")
+    print(f"Size : {path.stat().st_size:,} bytes")
 
     with path.open("rb") as file:
-        header = file.read(64)
+        header = file.read(128)
 
-    print("\nFirst 64 bytes:\n")
+    print("\nHeader Analysis\n")
 
-    for offset in range(0, len(header), 16):
-        chunk = header[offset:offset + 16]
-        hex_string = " ".join(f"{byte:02X}" for byte in chunk)
-        print(f"{offset:04X}: {hex_string}")
+    print(f"{'Offset':<10}{'Hex Bytes':<20}{'UInt32':>12}")
+    print("-" * 44)
 
-    print()
+    for offset in range(0, len(header), 4):
+
+        chunk = header[offset:offset + 4]
+
+        if len(chunk) < 4:
+            break
+
+        value = struct.unpack("<I", chunk)[0]
+
+        hex_string = " ".join(f"{b:02X}" for b in chunk)
+
+        print(f"0x{offset:04X}   {hex_string:<20}{value:>12,}")
 
 
 def main():
+
     if len(sys.argv) != 2:
         print("Usage:")
-        print("    python tools\\inspect_ctb.py <ctb_file>")
+        print("python tools\\inspect_ctb.py <ctb_file>")
         sys.exit(1)
 
     inspect_ctb(sys.argv[1])
