@@ -1,3 +1,3 @@
 # LithoForge Package
 
-Core Python library.
+The core Python package that powers LithoForge.
