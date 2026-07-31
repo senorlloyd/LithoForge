@@ -1,3 +1,5 @@
+<img width="500" height="500" alt="LF" src="https://github.com/user-attachments/assets/4eb13ca4-ea9d-4de5-bdf0-46e615902c3e" />
+
 # LithoForge
 Open-source digital lithography software for UV exposure systems and educational semiconductor manufacturing.
 
