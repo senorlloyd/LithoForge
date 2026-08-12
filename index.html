@@ -313,19 +313,19 @@
             <input type="number" id="artH" step="0.01" placeholder="auto">
           </div>
         </div>
-        <div class="footnote" id="autoDimNote">Size is detected automatically.</div>
-        <label>Placement</label>
+        <div class="footnote" id="autoDimNote">Size is detected automatically. The PCB center is the export origin (0,0).</div>
+        <label>Placement relative to PCB center (0,0)</label>
         <select id="posMode">
-          <option value="center">Centered</option>
-          <option value="offset">Custom position</option>
+          <option value="center">PCB center (0,0)</option>
+          <option value="offset">Custom center offset</option>
         </select>
         <div class="row" id="offsetRow" style="display:none;">
           <div>
-            <label>Offset X (mm)</label>
+            <label>Center offset X (mm)</label>
             <input type="number" id="offX" value="0" step="0.1">
           </div>
           <div>
-            <label>Offset Y (mm)</label>
+            <label>Center offset Y (mm)</label>
             <input type="number" id="offY" value="0" step="0.1">
           </div>
         </div>
@@ -425,7 +425,10 @@
     btn.addEventListener('click', ()=> goStep(currentStep - 1));
   });
 
-  function updateFormatNote(){}
+  function updateFormatNote(){
+    formatNote.textContent =
+      'Creates a single-layer SVGX exposure file for the Foto 8.9. The PCB center is the common (0,0) origin for artwork and export coordinates.';
+  }
   updateFormatNote();
 
   let svgText = null;
@@ -636,9 +639,9 @@
     try{
       const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
       const svg = doc.documentElement;
-      // Translate all artwork by its original min-x/min-y into the expanded
-      // 0,0 coordinate system. This preserves the exact artwork while making
-      // the viewport's origin the Gerber origin.
+      // Translate all artwork by its original min-x/min-y into a board-sized
+      // coordinate frame. The final export maps the center of this frame to
+      // the PCB origin (0,0), so every layer shares the same center.
       const ns = 'http://www.w3.org/2000/svg';
       const wrapper = doc.createElementNS(ns, 'g');
       wrapper.setAttribute('transform', `translate(${-meta.minX} ${-meta.minY})`);
@@ -798,21 +801,26 @@
       const artPxW = g.aw * g.pxPerMmX;
       const artPxH = g.ah * g.pxPerMmY;
 
-      let x, y;
-      if(posMode.value === 'center'){
-        x = (canvas.width - artPxW) / 2;
-        y = (canvas.height - artPxH) / 2;
-      } else {
+      // The physical PCB center is the master origin: (0,0).
+      // All artwork placement is defined relative to that center.
+      // +X is right; +Y is up. Canvas Y is inverted accordingly.
+      let centerX = canvas.width / 2;
+      let centerY = canvas.height / 2;
+      if(posMode.value === 'offset'){
         const ox = (parseFloat(offX.value)||0) * g.pxPerMmX;
         const oy = (parseFloat(offY.value)||0) * g.pxPerMmY;
-        x = ox;
-        y = canvas.height - artPxH - oy;
+        centerX += ox;
+        centerY -= oy;
       }
+
+      let x = centerX - artPxW / 2;
+      let y = centerY - artPxH / 2;
 
       ctx.save();
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       if(mirror.checked){
+        // Mirror about the PCB centerline, not the artwork's left edge.
         ctx.translate(canvas.width, 0);
         ctx.scale(-1, 1);
         x = canvas.width - x - artPxW;
@@ -835,8 +843,9 @@
       scaleBadge.textContent = g.pxPerMmX ? (g.pxPerMmX.toFixed(1)+' px/mm') : '—';
       statsReadout.innerHTML =
         `Foto 8.9 plate: <b>${g.rx}×${g.ry}px</b> over <b>${g.sw}×${g.sh}mm</b> → <b>${g.pxPerMmX.toFixed(2)} px/mm</b><br>` +
+        `PCB origin: <b>(0,0) at board center</b> · artwork center: <b>${((x + artPxW/2 - canvas.width/2)/g.pxPerMmX).toFixed(2)},${((canvas.height/2 - (y + artPxH/2))/g.pxPerMmY).toFixed(2)} mm</b><br>` +
         `Artwork placed at <b>${Math.round(x)},${Math.round(y)}</b>px, size <b>${Math.round(artPxW)}×${Math.round(artPxH)}</b>px` +
-        (gerberMeta ? `<br><b>Gerber:</b> absolute-coordinate viewport (origin 0,0)` : '') +
+        (gerberMeta ? `<br><b>Gerber:</b> absolute coordinates normalized to the PCB-centered export frame` : '') +
         (outOfBounds ? `<br><span class="warn">⚠ extends past the LCD boundary — will be cropped</span>` : '');
     } else {
       dimsReadout.textContent = `${canvas.width}×${canvas.height}px  ·  no artwork loaded`;
@@ -925,6 +934,7 @@
     function emit(key,y0,y1){
       const comma=key.indexOf(',');
       const x0=Number(key.slice(0,comma)), x1=Number(key.slice(comma+1));
+      // Convert LCD pixels to physical coordinates with the PCB center at (0,0).
       const X0=x0*pxmmX-g.sw/2, X1=x1*pxmmX-g.sw/2;
       const Y0=g.sh/2-y1*pxmmY, Y1=g.sh/2-y0*pxmmY;
       pieces.push(`M ${fmt(X0)} ${fmt(Y0)} L ${fmt(X1)} ${fmt(Y0)} L ${fmt(X1)} ${fmt(Y1)} L ${fmt(X0)} ${fmt(Y1)} Z `);
@@ -1022,6 +1032,10 @@
     }
   });
 
+  formatHint.innerHTML =
+    '<b>Coordinate system:</b> PCB center = <code>(0,0)</code>. ' +
+    'Positive X is right and positive Y is up. Centered artwork is placed on that origin, ' +
+    'and SVGX paths use the same physical coordinate system for every exported layer.';
   goStep(1);
   render();
 })();
