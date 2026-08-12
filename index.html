@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LithoForge — SVG → Flashforge Foto 8.9</title>
+<script src="https://unpkg.com/gerber-to-svg@^4.0.0/dist/gerber-to-svg.min.js"></script>
+<style>
+  :root{
+    --bg:#12140f;
+    --panel:#191c15;
+    --panel-2:#20241b;
+    --line:#333a2a;
+    --copper:#c98a4b;
+    --copper-dim:#8a6136;
+    --uv:#a855f7;
+    --uv-dim:#7c3aed;
+    --text:#e9e8dd;
+    --text-dim:#9aa08c;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    --sans: "Inter", "Segoe UI", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    height:100vh;
+    min-height:100vh;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(201,138,75,0.10) 1px, transparent 0);
+    background-size: 28px 28px;
+  }
+  header{
+    flex-shrink:0;
+    padding:22px 32px 16px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  header .brand{display:flex;align-items:baseline;gap:12px;}
+  header h1{
+    font-family:var(--mono);
+    font-weight:600;
+    font-size:40px;
+    letter-spacing:0.5px;
+    margin:0;
+    color:var(--text);
+  }
+  header h1 span{color:var(--uv);}
+  header .sub{font-size:12px;color:var(--text-dim);font-family:var(--mono);}
+  main{
+    display:grid;
+    grid-template-columns:380px 1fr;
+    gap:0;
+    flex:1 1 auto;
+    min-height:0;
+    overflow:hidden;
+  }
+  @media (max-width:900px){
+    main{grid-template-columns:1fr;}
+  }
+  .panel{padding:14px 24px;
+    border-right:1px solid var(--line);
+    background:var(--panel);
+    min-height:0;
+    min-width:0;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+  }
+  .stage{
+    padding:16px 24px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    min-height:0;
+    min-width:0;
+    overflow:hidden;
+  }
+
+  /* stepper */
+  .stepper{display:flex;margin-bottom:14px;}
+  .step-dot{
+    flex:1; text-align:center; cursor:pointer;
+    font-family:var(--mono); font-size:11px; color:var(--text-dim);
+    padding-bottom:10px; border-bottom:2px solid var(--line);
+    position:relative;
+  }
+  .step-dot .num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:20px; height:20px; border-radius:50%;
+    border:1px solid var(--line); margin-bottom:5px;
+    font-size:11px;
+  }
+  .step-dot span.lbl{display:block;}
+  .step-dot.active{color:var(--text); border-color:var(--uv);}
+  .step-dot.active .num{border-color:var(--uv); color:var(--uv);}
+  .step-dot.done{color:var(--copper); border-color:var(--copper-dim);}
+  .step-dot.done .num{border-color:var(--copper-dim); background:var(--copper-dim); color:#111;}
+
+  .step-title{
+    font-family:var(--mono); font-size:13px; font-weight:600;
+    letter-spacing:0.3px; margin:0 0 10px; color:var(--text);
+  }
+  .step{flex:1 1 auto; min-height:0; display:flex; flex-direction:column;}
+  .step[hidden]{display:none;}
+  .step-body{flex:1 1 auto; min-height:0; overflow-y:auto;}
+  .subhead{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.5px;
+    text-transform:uppercase; color:var(--copper); margin:12px 0 6px;
+  }
+  .subhead:first-child{margin-top:0;}
+
+  label{
+    display:block;
+    font-size:12.5px;
+    color:var(--text-dim);
+    margin:8px 0 4px;
+  }
+  label:first-of-type{margin-top:0;}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  input[type="text"], input[type="number"], select{
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text);
+    font-family:var(--mono);
+    font-size:13px;
+    padding:8px 10px;
+    border-radius:3px;
+    outline:none;
+  }
+  input:focus, select:focus{border-color:var(--copper);}
+  .drop{
+    border:1.5px dashed var(--line);
+    border-radius:6px;
+    padding:24px 14px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+    background:var(--panel-2);
+  }
+  .drop:hover, .drop.drag{border-color:var(--uv-dim); background:#1a1222;}
+  .drop input{display:none;}
+  .drop .fname{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--uv);
+    margin-top:6px;
+    word-break:break-all;
+  }
+  .drop .hint{font-size:11.5px; color:var(--text-dim); margin-top:4px;}
+  .checkline{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin:7px 0;
+    font-size:12.5px;
+    color:var(--text);
+  }
+  .checkline input{accent-color:var(--uv);}
+  button.primary{
+    width:100%;
+    background:var(--uv);
+    color:#ffffff;
+    border:none;
+    font-family:var(--mono);
+    font-weight:700;
+    font-size:13.5px;
+    letter-spacing:0.5px;
+    padding:13px 14px;
+    border-radius:4px;
+    cursor:pointer;
+    text-transform:uppercase;
+  }
+  button.primary:disabled{
+    background:#3b3345; color:#8f8499; cursor:not-allowed;
+  }
+  button.primary:not(:disabled):hover{background:#c084fc;}
+  .ghost-btn{
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    font-family:var(--mono);
+    font-size:11.5px;
+    padding:9px 14px;
+    border-radius:3px;
+    cursor:pointer;
+  }
+  .ghost-btn:hover{border-color:var(--copper); color:var(--copper);}
+  .ghost-btn:disabled{opacity:0.35; cursor:not-allowed;}
+  .stepnav{display:flex;gap:10px;margin-top:10px;flex:0 0 auto;}
+  .stepnav .primary{flex:2;}
+  .stepnav .ghost-btn{flex:1;}
+
+  .readout{
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:var(--text-dim);
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:10px 12px;
+    line-height:1.7;
+  }
+  .readout b{color:var(--text);font-weight:600;}
+  .readout .warn{color:#e6a23c;}
+  .stage-top{
+    display:flex; justify-content:space-between; align-items:center;
+    font-family:var(--mono); font-size:11.5px; color:var(--text-dim);
+  }
+  .canvas-wrap{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:
+      linear-gradient(var(--panel-2) 1px, transparent 1px) 0 0/100% 24px,
+      linear-gradient(90deg, var(--panel-2) 1px, transparent 1px) 0 0/24px 100%,
+      #0b0d08;
+    border:1px solid var(--line);
+    border-radius:6px;
+    min-height:0;
+    padding:12px;
+    position:relative;
+    overflow:auto;
+  }
+  #previewCanvas{
+    background:#000;
+    image-rendering:pixelated;
+    box-shadow: 0 0 0 1px var(--copper-dim), 0 0 40px rgba(168,85,247,0.12);
+    max-width:100%;
+    max-height:48vh;
+  }
+  .badge{
+    position:absolute; top:12px; left:12px;
+    font-family:var(--mono); font-size:10.5px; color:var(--uv-dim);
+    border:1px solid var(--line); padding:3px 8px; border-radius:3px;
+    background:rgba(0,0,0,0.5);
+  }
+  .hint-box{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:12px 16px;
+    font-size:12px;
+    color:var(--text-dim);
+    line-height:1.6;
+  }
+  .hint-box code{
+    color:var(--uv); background:#130d1a; padding:1px 5px; border-radius:3px;
+    font-family:var(--mono);
+  }
+  .footnote{font-size:11px; color:var(--text-dim); margin-top:8px;}
+
+    /* Small dark-theme LithoForge logo */
+    .site-logo {
+      width: 224px;
+      height: auto;
+      max-height: 77px;
+      object-fit: contain;
+      display: block;
+      flex: 0 0 auto;
+    }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <img src="lithoforge.png" alt="LithoForge" class="site-logo"><h1>LITHO<span>FORGE</span></h1>
+  </div>
+  <span class="sub">Flashforge Foto 8.9 · PCB UV exposure</span>
+</header>
+
+<main>
+  <div class="panel">
+
+    <div class="stepper">
+      <div class="step-dot active" data-step="1"><span class="num">1</span><span class="lbl">Artwork</span></div>
+      <div class="step-dot" data-step="2"><span class="num">2</span><span class="lbl">Export</span></div>
+    </div>
+
+    <!-- STEP 1 : ARTWORK + POSITION -->
+    <div class="step" data-step="1">
+      <div class="step-body">
+        <p class="step-title">Add your artwork</p>
+
+        <div class="drop" id="dropZone">
+          <input type="file" id="fileInput" accept=".svg,image/svg+xml,.gtl,.gbl,.gts,.gbs,.gto,.gbo,.gtp,.gbp,.gm1,.gm2,.gko,.gml,.drl,.txt,.gbr">
+          <div>Drop a file, or click to browse</div>
+          <div class="hint">SVG artwork or a Gerber PCB layer</div>
+          <div class="fname" id="fileName"></div>
+        </div>
+        <div class="footnote" id="gerberStatus"></div>
+
+        <p class="subhead">Position</p>
+        <div class="row">
+          <div>
+            <label>Width (mm)</label>
+            <input type="number" id="artW" step="0.01" placeholder="auto">
+          </div>
+          <div>
+            <label>Height (mm)</label>
+            <input type="number" id="artH" step="0.01" placeholder="auto">
+          </div>
+        </div>
+        <div class="footnote" id="autoDimNote">Size is detected automatically.</div>
+        <label>Placement</label>
+        <select id="posMode">
+          <option value="center">Centered</option>
+          <option value="offset">Custom position</option>
+        </select>
+        <div class="row" id="offsetRow" style="display:none;">
+          <div>
+            <label>Offset X (mm)</label>
+            <input type="number" id="offX" value="0" step="0.1">
+          </div>
+          <div>
+            <label>Offset Y (mm)</label>
+            <input type="number" id="offY" value="0" step="0.1">
+          </div>
+        </div>
+        <div class="checkline">
+          <input type="checkbox" id="mirror"> <label style="margin:0;">Mirror horizontally</label>
+        </div>
+        <div class="checkline">
+          <input type="checkbox" id="invert" checked> <label style="margin:0;">Invert colors</label>
+        </div>
+      </div>
+      <div class="stepnav">
+        <button class="primary" id="step1Next" data-next disabled>Next</button>
+      </div>
+    </div>
+
+    <!-- STEP 2 : EXPORT -->
+    <div class="step" data-step="2" hidden>
+      <div class="step-body">
+        <p class="step-title">Export</p>
+        <div class="row">
+          <div>
+            <label>Exposure (s)</label>
+            <input type="number" id="expTime" step="0.1" value="25">
+          </div>
+          <div>
+            <label>Layer height (mm)</label>
+            <input type="number" id="layerH" step="0.01" value="0.05">
+          </div>
+        </div>
+        <div class="subhead">Export</div>
+        <div class="footnote" id="formatNote">Creates a single-layer SVGX exposure file for the Foto 8.9.</div>
+      </div>
+      <div class="stepnav">
+        <button class="ghost-btn" data-back>Back</button>
+        <button class="primary" id="exportBtn" disabled>Export SVGX</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="stage">
+    <div class="stage-top">
+      <span id="dimsReadout">no artwork loaded</span>
+      <button class="ghost-btn" id="resetBtn">Reset</button>
+    </div>
+    <div class="canvas-wrap">
+      <span class="badge" id="scaleBadge">1 : 1 px</span>
+      <canvas id="previewCanvas" width="3840" height="2400"></canvas>
+    </div>
+    <div class="readout" id="statsReadout">Load artwork to see pixel size and scale here.</div>
+    <div class="hint-box" id="formatHint"></div>
+  </div>
+</main>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const fileInput = $('fileInput'), dropZone = $('dropZone'), fileName = $('fileName');
+  const artW = $('artW'), artH = $('artH');
+  const posMode = $('posMode'), offsetRow = $('offsetRow'), offX = $('offX'), offY = $('offY');
+  const mirror = $('mirror'), invert = $('invert');
+  const canvas = $('previewCanvas');
+  const ctx = canvas.getContext('2d');
+  const exportBtn = $('exportBtn');
+  const dimsReadout = $('dimsReadout');
+  const statsReadout = $('statsReadout');
+  const scaleBadge = $('scaleBadge');
+  const autoDimNote = $('autoDimNote');
+  const formatNote = $('formatNote');
+  const formatHint = $('formatHint');
+
+  // Fixed printer target — Flashforge Foto 8.9. 3840x2400 @ 192x120mm
+  // (matches its published 50-micron / 0.05mm pixel pitch exactly).
+  // Change these three values if you ever switch printers.
+  const PRINTER = {rx: 3840, ry: 2400, sw: 192, sh: 120};
+
+  // --- step navigation --------------------------------------------------
+  let currentStep = 1;
+  function goStep(n){
+    currentStep = Math.max(1, Math.min(2, n));
+    document.querySelectorAll('.step').forEach(el=>{
+      el.hidden = (parseInt(el.dataset.step) !== currentStep);
+    });
+    document.querySelectorAll('.step-dot').forEach(el=>{
+      const s = parseInt(el.dataset.step);
+      el.classList.toggle('active', s === currentStep);
+      el.classList.toggle('done', s < currentStep);
+    });
+  }
+  document.querySelectorAll('.step-dot').forEach(el=>{
+    el.addEventListener('click', ()=> goStep(parseInt(el.dataset.step)));
+  });
+  document.querySelectorAll('[data-next]').forEach(btn=>{
+    btn.addEventListener('click', ()=> goStep(currentStep + 1));
+  });
+  document.querySelectorAll('[data-back]').forEach(btn=>{
+    btn.addEventListener('click', ()=> goStep(currentStep - 1));
+  });
+
+  function updateFormatNote(){}
+  updateFormatNote();
+
+  let svgText = null;
+  let svgNaturalMM = null; // {w, h} if detected
+  let svgImage = null;
+  let loadedFileBase = 'mask';
+  let gerberMeta = null; // {minX,minY,vbW,vbH,maxX,maxY} in gerber-to-svg units
+
+
+  function mmFromSvgLength(val){
+    if(val == null) return null;
+    const m = String(val).trim().match(/^([0-9.]+)\s*([a-z%]*)$/i);
+    if(!m) return null;
+    const num = parseFloat(m[1]);
+    const unit = (m[2] || 'px').toLowerCase();
+    switch(unit){
+      case 'mm': return num;
+      case 'cm': return num * 10;
+      case 'in': return num * 25.4;
+      case 'pt': return num * (25.4/72);
+      case 'px': return num * (25.4/96);
+      case '': return num * (25.4/96);
+      default: return null;
+    }
+  }
+
+  function parseSvgDims(text){
+    try{
+      const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+      const svg = doc.documentElement;
+      if(!svg || svg.nodeName.toLowerCase() !== 'svg') return null;
+      const wAttr = svg.getAttribute('width');
+      const hAttr = svg.getAttribute('height');
+      let w = mmFromSvgLength(wAttr);
+      let h = mmFromSvgLength(hAttr);
+      if((w == null || h == null)){
+        const vb = svg.getAttribute('viewBox');
+        if(vb){
+          const parts = vb.trim().split(/[\s,]+/).map(Number);
+          if(parts.length === 4){
+            if(w == null) w = parts[2] * (25.4/96);
+            if(h == null) h = parts[3] * (25.4/96);
+          }
+        }
+      }
+      if(w == null || h == null) return null;
+      return {w, h};
+    }catch(e){ return null; }
+  }
+
+  // Browsers rasterize an <img src="...svg"> once at its *intrinsic* size and
+  // reuse that raster for every canvas draw — so a Fritzing SVG sized "50mm"
+  // (~189px at 96dpi) gets cached tiny and then blurrily stretched up to fill
+  // a 4K canvas. Fix: re-serialize the SVG with a large explicit width/height
+  // (anchored to its viewBox, so the artwork itself is untouched) so the
+  // browser's one-time raster is already high-resolution.
+  const HIRES_SOURCE_PX = 16384;
+  function buildHiresSvgUrl(text){
+    const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+    const svg = doc.documentElement;
+    if(!svg || svg.nodeName.toLowerCase() !== 'svg') return null;
+
+    let vb = svg.getAttribute('viewBox');
+    if(!vb){
+      const rawW = parseFloat((svg.getAttribute('width')||'').replace(/[a-z%]+$/i,'')) || 1000;
+      const rawH = parseFloat((svg.getAttribute('height')||'').replace(/[a-z%]+$/i,'')) || 1000;
+      svg.setAttribute('viewBox', `0 0 ${rawW} ${rawH}`);
+      vb = svg.getAttribute('viewBox');
+    }
+    const vbParts = vb.trim().split(/[\s,]+/).map(Number);
+    const vbW = vbParts[2] || 1, vbH = vbParts[3] || 1;
+    let outW, outH;
+    if(vbW >= vbH){ outW = HIRES_SOURCE_PX; outH = HIRES_SOURCE_PX * vbH / vbW; }
+    else { outH = HIRES_SOURCE_PX; outW = HIRES_SOURCE_PX * vbW / vbH; }
+    svg.setAttribute('width', outW);
+    svg.setAttribute('height', outH);
+
+    const serialized = new XMLSerializer().serializeToString(doc);
+    const blob = new Blob([serialized], {type:'image/svg+xml'});
+    return URL.createObjectURL(blob);
+  }
+
+  posMode.addEventListener('change', ()=>{
+    offsetRow.style.display = posMode.value === 'offset' ? 'grid' : 'none';
+    render();
+  });
+
+  [artW, artH, offX, offY, mirror, invert].forEach(el=>{
+    el.addEventListener('input', render);
+    el.addEventListener('change', render);
+  });
+
+  dropZone.addEventListener('click', ()=> fileInput.click());
+  dropZone.addEventListener('dragover', e=>{ e.preventDefault(); dropZone.classList.add('drag'); });
+  dropZone.addEventListener('dragleave', ()=> dropZone.classList.remove('drag'));
+  dropZone.addEventListener('drop', e=>{
+    e.preventDefault(); dropZone.classList.remove('drag');
+    if(e.dataTransfer.files && e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', e=>{
+    if(e.target.files && e.target.files[0]) loadFile(e.target.files[0]);
+  });
+
+  const GERBER_EXT_RE = /\.(gtl|gbl|gts|gbs|gto|gbo|gtp|gbp|gm\d*|gko|gml|drl|txt|gbr)$/i;
+
+  function loadFile(file){
+    const isSvg = /\.svg$/i.test(file.name) || file.type === 'image/svg+xml';
+    const isGerber = GERBER_EXT_RE.test(file.name);
+    if(!isSvg && !isGerber){
+      alert('Please choose an .svg file, or a Gerber layer file exported from Fritzing (.gtl, .gbl, .gts, .gbs, .gto, .gbo, .gm1, etc).');
+      return;
+    }
+    fileName.textContent = file.name;
+    gerberStatus.textContent = '';
+
+    if(isSvg){
+      loadedFileBase = file.name.replace(/\.svg$/i, '');
+      gerberMeta = null;
+      const reader = new FileReader();
+      reader.onload = ev => useSvgText(ev.target.result);
+      reader.readAsText(file);
+      return;
+    }
+
+    loadedFileBase = file.name.replace(/\.[^.]+$/, '');
+    gerberMeta = null;
+    const reader = new FileReader();
+    reader.onload = ev => convertGerberText(ev.target.result, file.name);
+    reader.readAsText(file);
+  }
+
+  function useSvgText(text){
+    svgText = text;
+    const dims = parseSvgDims(svgText);
+    svgNaturalMM = dims;
+    if(dims){
+      artW.value = dims.w.toFixed(3);
+      artH.value = dims.h.toFixed(3);
+      autoDimNote.textContent = 'Detected: ' + dims.w.toFixed(2) + ' × ' + dims.h.toFixed(2) + ' mm.';
+    } else {
+      artW.value = ''; artH.value = '';
+      autoDimNote.textContent = "Couldn't auto-detect size — enter it manually.";
+    }
+    const hiresUrl = buildHiresSvgUrl(svgText);
+    const img = new Image();
+    img.onload = () => {
+      svgImage = img;
+      exportBtn.disabled = false;
+      $('step1Next').disabled = false;
+      render();
+    };
+    img.onerror = () => alert('Could not parse this SVG (or the SVG rendered from the Gerber layer).');
+    if(hiresUrl){
+      img.src = hiresUrl;
+    } else {
+      const blob = new Blob([svgText], {type:'image/svg+xml'});
+      img.src = URL.createObjectURL(blob);
+    }
+  }
+
+  // --- Gerber support -------------------------------------------------
+  // Fritzing exports each PCB layer as its own loose file (no zip) —
+  // boardname_copperBottom.gbl, boardname_maskTop.gts, etc. One upload is
+  // one layer, so we convert it straight through gerber-to-svg (the
+  // tracespace project's Gerber/Excellon → SVG parser) into the same
+  // pipeline the direct-SVG path already uses.
+  const GERBER_LAYER_HINTS = [
+    {re:/\.gtl$/i, label:'Top Copper'},
+    {re:/\.gbl$/i, label:'Bottom Copper'},
+    {re:/\.gts$/i, label:'Top Soldermask'},
+    {re:/\.gbs$/i, label:'Bottom Soldermask'},
+    {re:/\.gto$/i, label:'Top Silkscreen'},
+    {re:/\.gbo$/i, label:'Bottom Silkscreen'},
+    {re:/\.gtp$/i, label:'Top Paste'},
+    {re:/\.gbp$/i, label:'Bottom Paste'},
+    {re:/\.(gko|gml|gm\d*)$/i, label:'Board Outline'},
+    {re:/\.(drl|txt)$/i, label:'Drill'},
+    {re:/\.gbr$/i, label:'Gerber layer'},
+  ];
+  function guessLayerLabel(filename){
+    for(const h of GERBER_LAYER_HINTS){ if(h.re.test(filename)) return h.label; }
+    return null;
+  }
+
+  const gerberStatus = $('gerberStatus');
+
+  function parseGerberViewBox(text){
+    try{
+      const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+      const svg = doc.documentElement;
+      const vb = (svg && svg.getAttribute('viewBox')) || '';
+      const p = vb.trim().split(/[\s,]+/).map(Number);
+      if(p.length !== 4 || p.some(n => !Number.isFinite(n))) return null;
+      const [minX,minY,vbW,vbH] = p;
+      return {minX,minY,vbW,vbH,maxX:minX+vbW,maxY:minY+vbH};
+    }catch(e){ return null; }
+  }
+
+  // gerber-to-svg crops its SVG viewport to the artwork bounding box. That
+  // is ideal for viewing one layer, but it loses the original Gerber origin
+  // when we subsequently center the bitmap. Expand the viewport back to the
+  // Gerber coordinate origin so layers generated from the same board retain
+  // their absolute X/Y relationship.
+  function makeGerberAbsoluteSvg(text){
+    const meta = parseGerberViewBox(text);
+    if(!meta) return {text, meta:null};
+
+    try{
+      const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+      const svg = doc.documentElement;
+      // Translate all artwork by its original min-x/min-y into the expanded
+      // 0,0 coordinate system. This preserves the exact artwork while making
+      // the viewport's origin the Gerber origin.
+      const ns = 'http://www.w3.org/2000/svg';
+      const wrapper = doc.createElementNS(ns, 'g');
+      wrapper.setAttribute('transform', `translate(${-meta.minX} ${-meta.minY})`);
+      while(svg.firstChild) wrapper.appendChild(svg.firstChild);
+      svg.appendChild(wrapper);
+      svg.setAttribute('viewBox', `0 0 ${meta.maxX} ${meta.maxY}`);
+      svg.setAttribute('width', `${meta.maxX * 25.4 / 1000}mm`);
+      svg.setAttribute('height', `${meta.maxY * 25.4 / 1000}mm`);
+      const normalized = new XMLSerializer().serializeToString(doc);
+      return {text:normalized, meta};
+    }catch(e){
+      return {text, meta};
+    }
+  }
+
+  function normalizeGerberSvg(text){
+    try{
+      const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+      const svg = doc.documentElement;
+      if(!svg || svg.nodeName.toLowerCase() !== 'svg') return text;
+
+      // gerber-to-svg uses currentColor for exposed/dark geometry.
+      // Make that explicit for standalone <img>-based rendering.
+      svg.setAttribute('color', '#000000');
+      doc.querySelectorAll('[fill],[stroke]').forEach(el=>{
+        if(el.getAttribute('fill') === 'currentColor') el.setAttribute('fill', '#000000');
+        if(el.getAttribute('stroke') === 'currentColor') el.setAttribute('stroke', '#000000');
+      });
+
+      return new XMLSerializer().serializeToString(doc);
+    }catch(e){
+      return text;
+    }
+  }
+
+  function convertGerberText(gerberText, filename){
+    gerberStatus.textContent = 'Converting ' + filename + '…';
+    exportBtn.disabled = true;
+
+    if(typeof gerberToSvg !== 'function'){
+      gerberStatus.textContent =
+        'Gerber converter library failed to load. This build needs internet access to load gerber-to-svg.';
+      return;
+    }
+
+    const label = guessLayerLabel(filename);
+
+    // IMPORTANT: use callback mode. gerber-to-svg returns a readable stream;
+    // callback mode consumes that stream and gives us the complete SVG string.
+    // Merely listening for "end" without consuming the readable stream can
+    // leave conversion stuck at "Converting…".
+    try{
+      gerberToSvg(
+        gerberText,
+        {
+          id: 'gerberLayer',
+          attributes: {color:'#000000'}
+        },
+        (err, result) => {
+          if(err){
+            gerberStatus.textContent =
+              'Could not parse ' + filename + ': ' + (err.message || err);
+            return;
+          }
+
+          if(!result || typeof result !== 'string'){
+            gerberStatus.textContent =
+              'Gerber conversion returned no SVG for ' + filename + '.';
+            return;
+          }
+
+          const normalized = normalizeGerberSvg(result);
+          const absolute = makeGerberAbsoluteSvg(normalized);
+          gerberMeta = absolute.meta;
+          const dims = parseSvgDims(absolute.text);
+
+          if(dims){
+            gerberStatus.textContent =
+              (label ? label + ' loaded. ' : 'Loaded. ') +
+              `Detected ${dims.w.toFixed(2)} × ${dims.h.toFixed(2)} mm. ` +
+              `Absolute Gerber coordinates preserved.`;
+          }else{
+            gerberStatus.textContent =
+              (label ? label + ' loaded.' : 'Loaded.') +
+              ' Could not determine physical dimensions automatically.';
+          }
+
+          useSvgText(absolute.text);
+        }
+      );
+    }catch(err){
+      gerberStatus.textContent =
+        'Could not convert ' + filename + ': ' + (err.message || err);
+    }
+  }
+
+
+  function currentGeom(){
+    const rx = PRINTER.rx, ry = PRINTER.ry, sw = PRINTER.sw, sh = PRINTER.sh;
+    const pxPerMmX = sw > 0 ? rx/sw : 0;
+    const pxPerMmY = sh > 0 ? ry/sh : 0;
+    let aw = parseFloat(artW.value);
+    let ah = parseFloat(artH.value);
+    if(!aw || !ah){
+      if(svgNaturalMM){ aw = svgNaturalMM.w; ah = svgNaturalMM.h; }
+      else { aw = sw; ah = sh; }
+    }
+    return {rx, ry, sw, sh, pxPerMmX, pxPerMmY, aw, ah};
+  }
+
+
+  function updateMaskStats(){
+    if(!canvas.width || !canvas.height) return;
+    try{
+      const data = ctx.getImageData(0,0,canvas.width,canvas.height).data;
+      let exposed = 0;
+      for(let i=0;i<data.length;i+=4){
+        if(data[i] > 127 && data[i+1] > 127 && data[i+2] > 127) exposed++;
+      }
+
+      // Foto 8.9: 192 mm / 3840 px = 0.05 mm per pixel.
+      const pixelArea = 0.05 * 0.05;
+      const area = exposed * pixelArea;
+      const total = canvas.width * canvas.height;
+      const pct = total ? (100 * exposed / total) : 0;
+
+      let el = document.getElementById('maskStatsReadout');
+      if(!el){
+        el = document.createElement('div');
+        el.id = 'maskStatsReadout';
+        el.style.cssText =
+          'margin-top:8px;padding:8px 10px;border:1px solid rgba(255,255,255,.12);' +
+          'border-radius:6px;font-size:12px;line-height:1.45;color:#cfd8dc;';
+        const stats = document.getElementById('statsReadout');
+        if(stats && stats.parentNode) stats.parentNode.insertBefore(el, stats.nextSibling);
+      }
+
+      el.innerHTML =
+        `<b>LCD mask</b>: ${exposed.toLocaleString()} exposed pixels · ` +
+        `<b>${area.toFixed(3)} mm²</b> exposed area · ` +
+        `${pct.toFixed(3)}% of LCD`;
+    }catch(e){}
+  }
+
+  function render(){
+    const g = currentGeom();
+    canvas.width = g.rx;
+    canvas.height = g.ry;
+
+    ctx.save();
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.fillStyle = invert.checked ? '#ffffff' : '#000000';
+    ctx.fillRect(0,0,canvas.width, canvas.height);
+    ctx.restore();
+
+    if(svgImage){
+      const artPxW = g.aw * g.pxPerMmX;
+      const artPxH = g.ah * g.pxPerMmY;
+
+      let x, y;
+      if(posMode.value === 'center'){
+        x = (canvas.width - artPxW) / 2;
+        y = (canvas.height - artPxH) / 2;
+      } else {
+        const ox = (parseFloat(offX.value)||0) * g.pxPerMmX;
+        const oy = (parseFloat(offY.value)||0) * g.pxPerMmY;
+        x = ox;
+        y = canvas.height - artPxH - oy;
+      }
+
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      if(mirror.checked){
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        x = canvas.width - x - artPxW;
+      }
+      ctx.drawImage(svgImage, x, y, artPxW, artPxH);
+      ctx.restore();
+
+      if(invert.checked){
+        ctx.save();
+        ctx.globalCompositeOperation = 'difference';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0,0,canvas.width, canvas.height);
+        ctx.restore();
+      }
+
+      applyThreshold();
+
+      const outOfBounds = (x < 0 || y < 0 || x+artPxW > canvas.width || y+artPxH > canvas.height);
+      dimsReadout.textContent = `${canvas.width}×${canvas.height}px  ·  ${g.aw.toFixed(2)}×${g.ah.toFixed(2)}mm`;
+      scaleBadge.textContent = g.pxPerMmX ? (g.pxPerMmX.toFixed(1)+' px/mm') : '—';
+      statsReadout.innerHTML =
+        `Foto 8.9 plate: <b>${g.rx}×${g.ry}px</b> over <b>${g.sw}×${g.sh}mm</b> → <b>${g.pxPerMmX.toFixed(2)} px/mm</b><br>` +
+        `Artwork placed at <b>${Math.round(x)},${Math.round(y)}</b>px, size <b>${Math.round(artPxW)}×${Math.round(artPxH)}</b>px` +
+        (gerberMeta ? `<br><b>Gerber:</b> absolute-coordinate viewport (origin 0,0)` : '') +
+        (outOfBounds ? `<br><span class="warn">⚠ extends past the LCD boundary — will be cropped</span>` : '');
+    } else {
+      dimsReadout.textContent = `${canvas.width}×${canvas.height}px  ·  no artwork loaded`;
+      statsReadout.textContent = 'Load artwork to see pixel size and scale here.';
+    }
+  
+    updateMaskStats();
+  }
+
+  function applyThreshold(){
+    const w = canvas.width, h = canvas.height;
+    const imgData = ctx.getImageData(0,0,w,h);
+    const d = imgData.data;
+    for(let i=0; i<d.length; i+=4){
+      const lum = 0.2126*d[i] + 0.7152*d[i+1] + 0.0722*d[i+2];
+      const v = lum > 127 ? 255 : 0;
+      d[i] = d[i+1] = d[i+2] = v;
+      d[i+3] = 255;
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  $('resetBtn').addEventListener('click', ()=>{
+    svgImage = null; svgText = null; svgNaturalMM = null; gerberMeta = null;
+    fileInput.value = ''; fileName.textContent = '';
+    artW.value=''; artH.value='';
+    autoDimNote.textContent = 'Size is detected automatically.';
+    exportBtn.disabled = true;
+    $('step1Next').disabled = true;
+    gerberStatus.textContent = '';
+    goStep(1);
+    render();
+  });
+
+
+  function makeBmpFromCanvas(sourceCanvas, w, h){
+    const c=document.createElement('canvas');
+    c.width=w; c.height=h;
+    const cctx=c.getContext('2d');
+    cctx.imageSmoothingEnabled=true;
+    cctx.drawImage(sourceCanvas,0,0,w,h);
+    const src=cctx.getImageData(0,0,w,h).data;
+    const rowBytes=Math.ceil(w*3/4)*4;
+    const pixelBytes=rowBytes*h;
+    const out=new Uint8Array(54+pixelBytes);
+    const dv=new DataView(out.buffer);
+    out[0]=0x42; out[1]=0x4d;
+    dv.setUint32(2,out.length,true);
+    dv.setUint32(10,54,true);
+    dv.setUint32(14,40,true);
+    dv.setInt32(18,w,true); dv.setInt32(22,h,true);
+    dv.setUint16(26,1,true); dv.setUint16(28,24,true);
+    dv.setUint32(30,0,true); dv.setUint32(34,pixelBytes,true);
+    dv.setInt32(38,2835,true); dv.setInt32(42,2835,true);
+    let q=54;
+    for(let y=h-1;y>=0;y--){
+      const b=y*w*4;
+      for(let x=0;x<w;x++){
+        const v=src[b+x*4];
+        out[q++]=v; out[q++]=v; out[q++]=v;
+      }
+      while((q-54)%rowBytes) out[q++]=0;
+    }
+    return out;
+  }
+
+  function concatBytes(parts){
+    let n=0;
+    for(const p of parts)n+=p.length;
+    const out=new Uint8Array(n); let o=0;
+    for(const p of parts){out.set(p,o);o+=p.length;}
+    return out;
+  }
+
+  // Merge identical horizontal white runs across adjacent rows. Each merged
+  // run becomes one exact rectangle in the SVG path. Nonzero fill is used so
+  // touching rectangles form one solid exposure rather than XORing.
+  function buildSvgxPath(g){
+    const w=canvas.width,h=canvas.height;
+    const data=ctx.getImageData(0,0,w,h).data;
+    const active=new Map(), pieces=[];
+    const pxmmX=g.sw/w, pxmmY=g.sh/h;
+    let whiteCount=0,minX=w,maxX=-1,minY=h,maxY=-1;
+
+    const fmt=n=>Number(n.toFixed(4));
+    function emit(key,y0,y1){
+      const comma=key.indexOf(',');
+      const x0=Number(key.slice(0,comma)), x1=Number(key.slice(comma+1));
+      const X0=x0*pxmmX-g.sw/2, X1=x1*pxmmX-g.sw/2;
+      const Y0=g.sh/2-y1*pxmmY, Y1=g.sh/2-y0*pxmmY;
+      pieces.push(`M ${fmt(X0)} ${fmt(Y0)} L ${fmt(X1)} ${fmt(Y0)} L ${fmt(X1)} ${fmt(Y1)} L ${fmt(X0)} ${fmt(Y1)} Z `);
+    }
+
+    for(let y=0;y<h;y++){
+      const runs=[];
+      let x=0,base=y*w*4;
+      while(x<w){
+        while(x<w && data[base+x*4]<128)x++;
+        if(x>=w)break;
+        const x0=x;
+        while(x<w && data[base+x*4]>=128){whiteCount++;x++;}
+        const x1=x; runs.push([x0,x1]);
+        if(x0<minX)minX=x0;if(x1>maxX)maxX=x1;
+      }
+      const next=new Map();
+      for(const [x0,x1] of runs){
+        const key=x0+','+x1;
+        next.set(key,active.has(key)?active.get(key):y);
+      }
+      for(const [key,y0] of active) if(!next.has(key)) emit(key,y0,y);
+      active.clear();
+      for(const [key,y0] of next)active.set(key,y0);
+      if(runs.length){if(y<minY)minY=y;if(y+1>maxY)maxY=y+1;}
+    }
+    for(const [key,y0] of active)emit(key,y0,h);
+
+    return {
+      d:pieces.join(''),
+      area:whiteCount*pxmmX*pxmmY,
+      perimeter:0,
+      minx:minX===w?0:minX*pxmmX-g.sw/2,
+      maxx:maxX<0?0:maxX*pxmmX-g.sw/2,
+      miny:minY===h?0:g.sh/2-maxY*pxmmY,
+      maxy:maxY<0?0:g.sh/2-minY*pxmmY
+    };
+  }
+
+  async function buildSvgxBlob(g,jobName,expTime,layerH){
+    const layer=buildSvgxPath(g);
+    const bmp1=makeBmpFromCanvas(canvas,128,128);
+    const bmp2=makeBmpFromCanvas(canvas,200,240);
+    const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+    const xml=`<svg xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" version="1.1" xmlns="http://www.w3.org/2000/svg">
+<printparams machinename="" materialname="Custom Resin" layerheight="${esc(layerH)}" volume="${(layer.area*layerH).toFixed(6)}" layercount="1" lightintensity="1" resolutionx="${g.rx}" resolutiony="${g.ry}" displaywidth="${g.sw}" displayheight="${g.sh}" machinez="150">
+<projectiontime attachlayer="0" buildinlayer="5" attachtime="${esc(expTime)}" basetime="${esc(expTime)}" />
+<projectionadjust x="100" y="100" />
+<printrange minx="${layer.minx.toFixed(4)}" miny="${layer.miny.toFixed(4)}" minz="0" maxx="${layer.maxx.toFixed(4)}" maxy="${layer.maxy.toFixed(4)}" maxz="${esc(layerH)}" />
+</printparams>
+<g id="background">
+</g>
+<g id="layer-0" area="${layer.area.toFixed(5)}" perimeter="${layer.perimeter.toFixed(2)}">
+<path d="${layer.d}" style="fill:white" fill-rule="nonzero" />
+</g>
+</svg>
+`;
+    const text=new TextEncoder().encode(xml);
+    const header=new Uint8Array(28);
+    header.set(new TextEncoder().encode('DLP-II 1.1\n'),0);
+    const dv=new DataView(header.buffer);
+    dv.setUint32(16,28,true);
+    dv.setUint32(20,28+bmp1.length,true);
+    dv.setUint32(24,28+bmp1.length+bmp2.length,true);
+    return new Blob([concatBytes([header,bmp1,bmp2,text])],{type:'application/octet-stream'});
+  }
+
+
+  exportBtn.addEventListener('click', async ()=>{
+    if(!svgImage) return;
+    exportBtn.disabled = true;
+    exportBtn.textContent = 'Building SVGX…';
+    try{
+      render();
+      const g = currentGeom();
+      const expTime = parseFloat($('expTime').value) || 25;
+      const layerH = parseFloat($('layerH').value) || 0.05;
+      const jobName = loadedFileBase.replace(/[^a-zA-Z0-9_-]/g,'_') || 'mask';
+
+      const svgxBlob = await buildSvgxBlob(g, jobName, expTime, layerH);
+      const url = URL.createObjectURL(svgxBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${jobName}_mask.svgx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    }catch(err){
+      console.error(err);
+      alert('Could not create the SVGX file. See the browser console for details.');
+    }finally{
+      exportBtn.disabled = false;
+      exportBtn.textContent = 'Export SVGX';
+    }
+  });
+
+  goStep(1);
+  render();
+})();
+</script>
+</body>
+</html>
